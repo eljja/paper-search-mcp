@@ -1,0 +1,22 @@
+[Unit]
+Description=Paper Search MCP (Streamable HTTP)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/home/eljja/paper_search_mcp
+EnvironmentFile=-/home/eljja/paper_search_mcp/.env
+ExecStart=/home/eljja/paper_search_mcp/.venv/bin/paper-search-mcp --transport streamable-http --host 127.0.0.1 --port 8765 --path /mcp
+# Apply the authenticated public route through Caddy's localhost admin API.
+# This avoids storing the plaintext password and restores the route on boot.
+ExecStartPost=/usr/bin/caddy reload --config /home/eljja/paper_search_mcp/deploy/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=default.target

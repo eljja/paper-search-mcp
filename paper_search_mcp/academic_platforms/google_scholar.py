@@ -17,6 +17,7 @@ class GoogleScholarSearcher(PaperSource):
     """Custom implementation of Google Scholar paper search"""
     
     SCHOLAR_URL = "https://scholar.google.com/scholar"
+    SERPAPI_URL = "https://serpapi.com/search.json"
     CONSENT_COOKIE_VALUE = "YES+"
     BROWSERS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -24,10 +25,19 @@ class GoogleScholarSearcher(PaperSource):
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
     ]
 
-    def __init__(self, max_retries: int = 3, retry_delay: float = 2.0, proxy_url: Optional[str] = None):
+    def __init__(
+        self,
+        max_retries: int = 3,
+        retry_delay: float = 2.0,
+        proxy_url: Optional[str] = None,
+        serpapi_api_key: Optional[str] = None,
+    ):
         self.max_retries = max(1, max_retries)
         self.retry_delay = max(0.5, retry_delay)
         self.proxy_url = (proxy_url or get_env("GOOGLE_SCHOLAR_PROXY_URL", "")).strip()
+        self.serpapi_api_key = (
+            serpapi_api_key or get_env("SERPAPI_API_KEY", "")
+        ).strip()
         self._setup_session()
 
     def _setup_session(self):
@@ -147,6 +157,146 @@ class GoogleScholarSearcher(PaperSource):
             logger.warning(f"Failed to parse paper: {e}")
             return None
 
+    def _parse_serpapi_paper(self, item: dict) -> Optional[Paper]:
+        """Convert one SerpAPI Google Scholar result into a Paper."""
+        try:
+            title = str(item.get("title") or "").strip()
+            if not title:
+                return None
+
+            publication_info = item.get("publication_info") or {}
+            summary = str(publication_info.get("summary") or "")
+            author_items = publication_info.get("authors") or []
+            authors = [
+                str(author.get("name") or "").strip()
+                for author in author_items
+                if isinstance(author, dict) and author.get("name")
+            ]
+            if not authors and summary:
+                authors = [
+                    author.strip()
+                    for author in summary.split(" - ", 1)[0].split(",")
+                    if author.strip()
+                ]
+
+            link = str(item.get("link") or "").strip()
+            snippet = str(item.get("snippet") or "").strip()
+            resources = item.get("resources") or []
+            pdf_url = ""
+            for resource in resources:
+                if not isinstance(resource, dict):
+                    continue
+                resource_link = str(resource.get("link") or "").strip()
+                file_format = str(resource.get("file_format") or "").lower()
+                if resource_link and (
+                    file_format == "pdf" or resource_link.lower().endswith(".pdf")
+                ):
+                    pdf_url = resource_link
+                    break
+
+            inline_links = item.get("inline_links") or {}
+            cited_by = inline_links.get("cited_by") or {}
+            citations = cited_by.get("total") or 0
+            try:
+                citations = int(citations)
+            except (TypeError, ValueError):
+                citations = 0
+
+            year = self._extract_year(summary)
+            doi = (
+                extract_doi(link)
+                or extract_doi(title)
+                or extract_doi(snippet)
+                or extract_doi(pdf_url)
+            )
+            result_id = str(item.get("result_id") or hash(link or title))
+
+            return Paper(
+                paper_id=f"gs_{result_id}",
+                title=title,
+                authors=authors,
+                abstract=snippet,
+                url=link,
+                pdf_url=pdf_url,
+                published_date=datetime(year, 1, 1) if year else None,
+                updated_date=None,
+                source="google_scholar",
+                categories=[],
+                keywords=[],
+                doi=doi,
+                citations=citations,
+            )
+        except Exception as exc:
+            logger.warning("Failed to parse SerpAPI paper: %s", exc)
+            return None
+
+    def _search_serpapi(
+        self,
+        query: str,
+        max_results: int,
+        deadline: Optional[float],
+    ) -> List[Paper]:
+        papers: List[Paper] = []
+        start = 0
+
+        while len(papers) < max_results:
+            request_timeout = self._remaining_timeout(deadline, 30.0)
+            if request_timeout is None:
+                logger.warning("SerpAPI Google Scholar search deadline reached")
+                break
+
+            page_size = min(20, max_results - len(papers))
+            try:
+                response = self.session.get(
+                    self.SERPAPI_URL,
+                    params={
+                        "engine": "google_scholar",
+                        "q": query,
+                        "start": start,
+                        "num": page_size,
+                        "api_key": self.serpapi_api_key,
+                    },
+                    timeout=request_timeout,
+                )
+                if response.status_code != 200:
+                    logger.error(
+                        "SerpAPI Google Scholar returned HTTP %s",
+                        response.status_code,
+                    )
+                    break
+                payload = response.json()
+            except (requests.RequestException, ValueError) as exc:
+                # Request exception messages can include the URL query string,
+                # which contains the API key. Log only the exception type.
+                logger.error(
+                    "SerpAPI Google Scholar search failed (%s)",
+                    type(exc).__name__,
+                )
+                break
+
+            if payload.get("error"):
+                logger.error("SerpAPI Google Scholar error: %s", payload["error"])
+                break
+
+            results = payload.get("organic_results") or []
+            if not results:
+                break
+
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                paper = self._parse_serpapi_paper(item)
+                if paper:
+                    papers.append(paper)
+                if len(papers) >= max_results:
+                    break
+
+            if len(results) < page_size:
+                break
+            start += len(results)
+
+        return papers[:max_results]
+
     def search(
         self,
         query: str,
@@ -165,6 +315,9 @@ class GoogleScholarSearcher(PaperSource):
             if timeout_seconds is not None
             else None
         )
+
+        if self.serpapi_api_key:
+            return self._search_serpapi(query, max_results, deadline)
 
         while len(papers) < max_results:
             if deadline is not None and time.monotonic() >= deadline:

@@ -1,0 +1,17 @@
+openrhiza.com, www.openrhiza.com {
+	handle /mcp/paper-search* {
+		basic_auth {
+			smep-n {$PAPER_SEARCH_MCP_BASIC_AUTH_HASH}
+		}
+
+		rewrite * /mcp
+		reverse_proxy 127.0.0.1:8765 {
+			header_up Host 127.0.0.1:8765
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
