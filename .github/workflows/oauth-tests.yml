@@ -1,0 +1,34 @@
+name: OAuth compatibility and security
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -e '.[dev,oauth]'
+      - run: python -m pip check
+      - run: >-
+          python -m pytest -q tests/test_oauth_gateway.py
+          tests/test_server_transport.py tests/test_tool_schema_compat.py
+          tests/test_package_entrypoints.py tests/test_config_env.py
+          tests/test_stabilization_regressions.py tests/test_search_timeouts.py
+      - name: Validate opt-in Caddy routing
+        run: |
+          test_hash=$(docker run --rm caddy:2.10.0 caddy hash-password --plaintext 'offline-test-only')
+          docker run --rm -e PAPER_SEARCH_MCP_BASIC_AUTH_HASH="$test_hash" -v "$PWD/deploy:/etc/caddy:ro" caddy:2.10.0 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          mkdir -p deploy/oauth-enabled
+          cp deploy/paper-search-oauth.caddy deploy/oauth-enabled/
+          docker run --rm -e PAPER_SEARCH_MCP_BASIC_AUTH_HASH="$test_hash" -v "$PWD/deploy:/etc/caddy:ro" caddy:2.10.0 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker run --rm -e PAPER_SEARCH_MCP_BASIC_AUTH_HASH="$test_hash" -v "$PWD/deploy:/etc/caddy:ro" caddy:2.10.0 caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile > /tmp/caddy-adapted.json
+          python tests/check_caddy_oauth_routes.py /tmp/caddy-adapted.json

@@ -19,6 +19,10 @@ class TestPackageEntrypoints(unittest.TestCase):
             console_scripts.get("paper-search"),
             "paper_search_mcp.cli:main",
         )
+        self.assertEqual(
+            console_scripts.get("paper-search-oauth"),
+            "paper_search_mcp.oauth_gateway:main",
+        )
 
 
 if __name__ == "__main__":

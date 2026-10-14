@@ -126,7 +126,10 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 !.env.example
+*.env
+deploy/oauth-enabled/
 .venv
 env/
 venv/

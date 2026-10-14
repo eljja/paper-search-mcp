@@ -1,4 +1,7 @@
 openrhiza.com, www.openrhiza.com {
+	# Empty glob keeps the legacy deployment unchanged. Opt-in OAuth routes:
+	import oauth-enabled/*.caddy
+
 	handle /mcp/paper-search* {
 		basic_auth {
 			smep-n {$PAPER_SEARCH_MCP_BASIC_AUTH_HASH}
