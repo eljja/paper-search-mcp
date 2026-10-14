@@ -1,5 +1,7 @@
 # Paper Search MCP 배포 메모
 
+ChatGPT 연결은 [OAuth 배포 및 연결 안내](CHATGPT.ko.md)를 참고한다. 아래 Basic Auth 경로는 기존 클라이언트용으로 유지한다. 현재 공개 서버의 실제 인증 기능은 이 저장소의 배포 파일보다 확장되어 있을 수 있으므로, 운영 설정을 덮어쓰기 전에 배포 소스를 확인한다.
+
 ## 접속 정보
 
 - MCP URL: `https://openrhiza.com/mcp/paper-search`

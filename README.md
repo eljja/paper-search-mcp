@@ -48,9 +48,11 @@ A Model Context Protocol (MCP) server for searching and downloading academic pap
 
 ## MCP Authorization Compatibility
 
-The bundled MCP server currently runs locally over `stdio`. It does not implement OAuth 2.1 protected-resource metadata, bearer-token validation, scopes, or HTTP 401/403 authorization responses.
+The legacy server supports `stdio`, SSE and Streamable HTTP. Its HTTP backend is intended for loopback use; the existing Caddy deployment protects it with Basic Auth. ChatGPT's custom MCP connection does not provide a Basic Auth credential/header input.
 
-For a remote protected deployment, put the server behind an MCP/HTTP gateway or reverse proxy that enforces OAuth and forwards only authorized requests. Native authenticated HTTP transport requires a separate transport and security design and is intentionally outside this small stabilization batch.
+An opt-in `paper-search-oauth` adapter (`pip install '.[oauth]'`) adds a separate, stateless Streamable HTTP resource server with protected-resource discovery, RS256 JWT validation, subject/client allowlists, `papers:read` scope enforcement and HTTP 401/403 challenges. It reuses existing non-writing tool handlers and schemas, and does not expose download/local-writing tools. Login, consent, S256 PKCE, authorization-code/refresh-token grants and authorization-server discovery belong to an external OAuth provider. The original stdio, SSE, HTTP and Basic clients remain unchanged. This is a resource-server implementation, not a bundled authorization server or a claim of successful ChatGPT account linking.
+
+See [ChatGPT connection and deployment guide (한국어)](deploy/CHATGPT.ko.md) for provider setup, deployment, security limits and separate code/account verification steps. The public deployment may run additional authentication code that is not represented by `main`; verify its deployed source before replacing any live route.
 
 ---
 

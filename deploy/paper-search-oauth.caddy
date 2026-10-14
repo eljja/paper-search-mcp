@@ -1,0 +1,13 @@
+# Optional: copy to deploy/oauth-enabled/paper-search-oauth.caddy.
+# Import inside the existing openrhiza.com site. These exact paths are sorted
+# before the legacy /mcp/paper-search* matcher. No Basic auth on discovery/OAuth.
+handle /mcp/paper-search/oauth {
+    reverse_proxy 127.0.0.1:8766 {
+        # Preserve the canonical public Host for the gateway's Host validation.
+        # Authorization goes only to the local resource server, never providers.
+        flush_interval -1
+    }
+}
+handle /.well-known/oauth-protected-resource/mcp/paper-search/oauth {
+    reverse_proxy 127.0.0.1:8766
+}

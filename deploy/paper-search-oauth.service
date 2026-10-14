@@ -1,0 +1,21 @@
+[Unit]
+Description=Paper Search MCP OAuth resource server (read-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/eljja/paper_search_mcp
+EnvironmentFile=/home/eljja/.config/paper-search-mcp/oauth.env
+Environment=PAPER_SEARCH_MCP_ENV_FILE=/home/eljja/.config/paper-search-mcp/oauth.env
+ExecStart=/home/eljja/paper_search_mcp/.venv/bin/paper-search-oauth --port 8766
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+UMask=0077
+
+[Install]
+WantedBy=default.target
